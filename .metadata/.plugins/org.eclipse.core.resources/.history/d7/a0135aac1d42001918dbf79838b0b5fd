@@ -1,0 +1,82 @@
+/* 433-294 Object Oriented Software Development
+ * RPG Game Engine
+ * 
+ * Name: Derek Chen 
+ * Student_ID: 766509
+ */
+
+import org.newdawn.slick.Graphics;
+import org.newdawn.slick.SlickException;
+
+public class PrinceAldric extends Villager {
+
+	//initial PrinceAldric stats
+    private static final int START_HP = 1;
+    private static final int START_DAMAGE = 0;		
+    private static final int START_COOLDOWN = 0;
+	
+
+    private static final String NEED_ELIXIR = "Please seek out the Elixir of Life to cure the king.";
+    private static final String HAS_ELIXIR = "The elixir! My father is cured! Thank you!";
+    
+    private boolean hasElixer = false;
+	private double hasElixirTimer = 0;
+	private double noElixirTimer = 0;
+    
+	public PrinceAldric(String image_path, double x, double y, String name,
+			String text, boolean talking, int talkTime)
+			throws SlickException {
+		super(image_path, x, y, name, text, talking, talkTime);
+		setUnitStats(new Stats(START_COOLDOWN,START_DAMAGE,START_HP,START_HP));
+	}
+
+	
+	
+	public void interact(int delta, World world) {
+		
+		if (UnitManager.unitNearPlayer(world.getPlayer(), this, this.getTalkRange())
+				&& RPG.isInteract()
+				&& hasElixer == false) {
+			noElixirTimer = getMaxTalkingTime();
+		}
+		
+		if (UnitManager.unitNearPlayer(world.getPlayer(), this, this.getTalkRange())
+				&& RPG.isInteract() 
+				&& world.getPlayer().getInventory()[world.getElixirID()] == true) 
+		{
+			world.getPlayer().setInventory(false,world.getElixirID());
+			hasElixer = true;
+		}
+		
+
+		if (UnitManager.unitNearPlayer(world.getPlayer(), this, this.getTalkRange())
+				&& RPG.isInteract()
+				&& hasElixer == true) {
+			hasElixirTimer = getMaxTalkingTime();
+		}
+		
+		if (noElixirTimer > 0) {
+			noElixirTimer -= delta;
+		}
+		if (hasElixirTimer > 0) {
+			hasElixirTimer -= delta;
+		}
+	}
+	
+	
+	public void renderTalk(World world, Graphics g) {
+		if (noElixirTimer > 0 && hasElixer == false) {
+			g.drawString(NEED_ELIXIR, 300 - g.getFont().getWidth(NEED_ELIXIR)/2, 350);
+		}
+		if (hasElixirTimer > 0) {
+			g.drawString(HAS_ELIXIR, 300 - g.getFont().getWidth(HAS_ELIXIR)/2, 350);
+		}
+	}
+
+
+
+
+	
+}
+
+

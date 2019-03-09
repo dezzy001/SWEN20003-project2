@@ -1,0 +1,550 @@
+/* 433-294 Object Oriented Software Development
+ * RPG Game Engine
+ * Code usage from Sample Solution
+ * Author: Matt Giuca <mgiuca>
+ * 
+ * Name: Derek Chen 
+ * Student_ID: 766509
+ */
+
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.util.Scanner;
+
+import org.newdawn.slick.Graphics;
+import org.newdawn.slick.Image;
+import org.newdawn.slick.SlickException;
+import org.newdawn.slick.tiled.TiledMap;
+
+/** Represents the entire game world.
+ * (Designed to be instantiated just once for the whole game).
+ */
+public class World
+{
+//	this class spawns all the units and player in their specified locations, and updates their position constantly
+	//starting coordinates
+    private static final int PLAYER_START_X = 756, PLAYER_START_Y = 684;//player
+    //villagers
+    private static final int PRINCEALDRIC_START_X = 467, PRINCEALDRIC_START_Y = 679;
+    private static final int ELVIRA_START_X = 738, ELVIRA_START_Y = 549;
+    private static final int GARTH_START_X = 756, GARTH_START_Y = 870;
+    //items
+    private static final int AMULET_X = 965,  AMULET_Y = 3563;
+    private static final int SWORD_X = 546, SWORD_Y = 6707;
+    private static final int TOME_X = 4791,  TOME_Y = 1253;
+    private static final int ELIXIR_X = 1976,  ELIXIR_Y = 402;
+    
+    
+    //number of aggressive monsters
+    private static final int NUM_ZOMBIE = 38;
+    private static final int NUM_SKELETON = 24;
+    private static final int NUM_BANDIT = 34;
+    private static final int NUM_DRAELIC = 1;
+    //number of passive monsters
+    private static final int NUM_GIANTBAT = 30;
+    
+    private Player player = null;
+    private TiledMap map = null;
+    private Camera camera = null;
+    
+    
+    //villagers
+    private Elvira elvira = null;
+    private PrinceAldric princeAldric = null;
+    private Garth garth = null;
+    
+    //items
+    private AmuletOfVitality amulet = null;
+    private SwordOfStrength sword = null;
+    private TomeOfAgility tome = null;
+    private ElixirOfLife elixir = null;
+    
+    //monsters
+    private Zombie[] zombieArray = new Zombie[NUM_ZOMBIE];
+    private Skeleton[] skeletonArray = new Skeleton[NUM_SKELETON];
+    private Bandit[] banditArray = new Bandit[NUM_BANDIT];
+    private Draelic[] draelicArray = new Draelic[NUM_DRAELIC];    
+    private GiantBat[] giantBatArray = new GiantBat[NUM_GIANTBAT];
+    
+    //buffs
+    private BuffState buffs = null;
+    
+    /** Map width, in pixels. */
+    private int getMapWidth()
+    {
+        return map.getWidth() * getTileWidth();
+    }
+
+    /** Map height, in pixels. */
+    private int getMapHeight()
+    {
+        return map.getHeight() * getTileHeight();
+    }
+
+    /** Tile width, in pixels. */
+    private int getTileWidth()
+    {
+        return map.getTileWidth();
+    }
+
+    /** Tile height, in pixels. */
+    private int getTileHeight()
+    {
+        return map.getTileHeight();
+    }
+
+    /** Create a new World object. 
+     * @throws FileNotFoundException */
+    public World()
+    throws SlickException, FileNotFoundException
+    {
+        map = new TiledMap(RPG.ASSETS_PATH + "/map.tmx", RPG.ASSETS_PATH);
+        player = new Player(RPG.ASSETS_PATH + "/units/player.png",
+        		PLAYER_START_X,PLAYER_START_Y ,"Player",RPG.ASSETS_PATH + "/panel.png");
+        camera = new Camera(player, RPG.SCREEN_WIDTH, RPG.SCREEN_HEIGHT - RPG.PANEL_HEIGHT);
+        
+        buffs = new BuffState();
+        
+        //villagers
+        assignVillagers();
+              
+        //items
+        assignItems();
+        
+        //Assign all the monsters into arrays
+        assignMonster();
+
+
+
+    }
+
+    /** Update the game state for a frame.
+     * @param dir_x The player's movement in the x axis (-1, 0 or 1).
+     * @param dir_y The player's movement in the y axis (-1, 0 or 1).
+     * @param delta Time passed since last frame (milliseconds).
+     */
+    public void update(int dir_x, int dir_y, int delta)
+    throws SlickException
+    {
+    	
+		player.movePlayer(this, dir_x, dir_y, delta);
+		player.updateUnit(delta, this, dir_x, dir_y);
+        
+        
+        updateMonster(delta);
+        
+        updateItem();
+        
+        player.update(delta, this);
+        player.onDeath(this);
+        
+        
+        //villager interaction
+        princeAldric.interact(delta, this);
+        elvira.interact(delta, this);
+        garth.interact(delta, this);
+        
+        camera.update();
+    }
+
+    /** Render the entire screen, so it reflects the current game state.
+     * @param g The Slick graphics object, used for drawing.
+     */
+    public void render(Graphics g)
+    throws SlickException
+    {
+    	
+        // Render the relevant section of the map
+        int x = -(camera.getMinX() % getTileWidth());
+        int y = -(camera.getMinY() % getTileHeight());
+        int sx = camera.getMinX() / getTileWidth();
+        int sy = camera.getMinY()/ getTileHeight();
+        int w = (camera.getMaxX() / getTileWidth()) - (camera.getMinX() / getTileWidth()) + 1;
+        int h = (camera.getMaxY() / getTileHeight()) - (camera.getMinY() / getTileHeight()) + 1;
+        map.render(x, y, sx, sy, w, h);
+        
+        // Translate the Graphics object
+        g.translate(-camera.getMinX(), -camera.getMinY());
+        
+        //Render the villagers
+        villagerRender(g);
+        
+        //render the items
+        itemRender(g);
+        
+        //render the monsters
+        monsterRender(g);
+        
+        // Render the player
+        player.renderImage(g);
+        
+        // Stops the translation for static images and objects/texts
+        g.translate(camera.getMinX(), camera.getMinY());
+        
+        //dialogue
+        princeAldric.renderTalk(this, g);
+        elvira.renderTalk(this, g);
+        garth.renderTalk(this, g);
+        
+        // Render the status panel
+        player.renderPanel(g,this);
+        
+        
+        g.drawString(" x =" + player.getX(),  20, 100);
+        g.drawString(" y =" + player.getY(),  20, 120);
+
+    }
+    
+    /** Determines whether a particular map coordinate blocks movement.
+     * @param x Map x coordinate (in pixels).
+     * @param y Map y coordinate (in pixels).
+     * @return true if the coordinate blocks movement.
+     */
+    public boolean terrainBlocks(double x, double y) {
+        // Check we are within the bounds of the map
+        if (x < 0 || y < 0 || x > getMapWidth() || y > getMapHeight()) {
+            return true;
+        }
+        
+        // Check the tile properties
+        int tile_x = (int) x / getTileWidth();
+        int tile_y = (int) y / getTileHeight();
+        int tileid = map.getTileId(tile_x, tile_y, 0);
+        String block = map.getTileProperty(tileid, "block", "0");
+        return !block.equals("0");
+    }
+    
+    
+    //rendering methods------------------------------------------------
+    //renders the image and healthbar of villagers
+	public void villagerRender(Graphics g) {
+        elvira.renderImage(g);
+        elvira.renderHealthbar(g);
+        
+        garth.renderImage(g);
+        garth.renderHealthbar(g);
+        
+        princeAldric.renderImage(g);
+        princeAldric.renderHealthbar(g);
+	}
+	
+    //renders the items
+	public void itemRender(Graphics g) {
+		//if items aren't picked up , then render it's image
+		if(amulet.isPickedUp() == false){
+		amulet.renderImage(g);
+		}
+		if(tome.isPickedUp() == false){
+        tome.renderImage(g);
+		}
+		if(sword.isPickedUp() == false){
+        sword.renderImage(g);
+        }
+		if(elixir.isPickedUp() == false){
+        elixir.renderImage(g);
+		}
+	}
+	
+    //renders the image and healthbar of monsters
+    //handles monster deaths (i.e when monster object = null)
+    public void monsterRender(Graphics g){
+		int i;
+    	for (i=0;i<NUM_ZOMBIE;i++){
+
+			//check is monster exists (i.e if monster isNULL)
+			if(zombieArray[i] != null){
+				zombieArray[i].renderImage(g);
+				zombieArray[i].renderHealthbar(g);
+			}
+		}
+		
+		for (i=0;i<NUM_BANDIT;i++) {
+
+			//check is monster exists (i.e if monster isNULL)
+			if(banditArray[i] != null){
+				banditArray[i].renderImage(g);
+				banditArray[i].renderHealthbar(g);
+			}
+		}
+		
+		for (i=0;i<NUM_SKELETON;i++) {
+
+			//check is monster exists (i.e if monster isNULL)
+			if(skeletonArray[i] != null){
+				skeletonArray[i].renderImage(g);
+				skeletonArray[i].renderHealthbar(g);
+			}
+		}
+		
+		for (i=0;i<NUM_GIANTBAT;i++) {
+			//check is monster exists (i.e if monster isNULL)
+			if(giantBatArray[i] != null){
+				giantBatArray[i].renderImage(g);
+				giantBatArray[i].renderHealthbar(g);
+			}
+		}
+		
+		for (i=0;i<NUM_DRAELIC;i++) {
+
+			//check is monster exists (i.e if monster isNULL)
+			if(draelicArray[i] != null){
+				draelicArray[i].renderImage(g);
+				draelicArray[i].renderHealthbar(g);
+			}
+		}
+    }
+	
+    //assigning methods-----------------------------------------------------------
+	public void assignVillagers() throws SlickException{
+        princeAldric = new PrinceAldric(RPG.ASSETS_PATH + "/units/prince.png",
+        		PRINCEALDRIC_START_X,PRINCEALDRIC_START_Y, "Prince Aldric", null, false, 0);
+        elvira = new Elvira(RPG.ASSETS_PATH + "/units/shaman.png",
+        		ELVIRA_START_X,ELVIRA_START_Y, "Elvira", null, false, 0);
+        garth = new Garth(RPG.ASSETS_PATH + "/units/peasant.png",
+        		GARTH_START_X,GARTH_START_Y, "Garth", null, false, 0);
+	}
+	
+	public void assignItems() throws SlickException{
+		amulet = new AmuletOfVitality(RPG.ASSETS_PATH + 
+				"/items/amulet.png", AMULET_X, AMULET_Y);
+		
+		sword = new SwordOfStrength(RPG.ASSETS_PATH + 
+				"/items/sword.png", SWORD_X, SWORD_Y);
+		
+		tome = new TomeOfAgility(RPG.ASSETS_PATH + 
+				"/items/tome.png", TOME_X, TOME_Y);
+		
+		elixir = new ElixirOfLife(RPG.ASSETS_PATH + 
+				"/items/elixir.png", ELIXIR_X, ELIXIR_Y);
+		
+	}
+	
+	//stores monster data into their respective object array
+    public void assignMonster() throws FileNotFoundException, SlickException{
+      	
+    	File file = new File(RPG.DATA_PATH + "/units.dat");
+    	Scanner readMonsters = new Scanner(file);
+    	readMonsters.useDelimiter(",|\n");
+    	String monsterName, xString, yString;
+    	int x,y;
+    	//index's for each array
+    	int i1=0, i2=0, i3=0, i4=0, i5=0;
+		
+		while (readMonsters.hasNext()) {
+			monsterName = readMonsters.next();
+			xString = readMonsters.next();
+			yString = readMonsters.next();
+			
+			x = Integer.parseInt(xString.trim());
+			y = Integer.parseInt(yString.trim());
+
+			if(monsterName.equals("Zombie")){
+				zombieArray[i1] = new Zombie(RPG.ASSETS_PATH + "/units/zombie.png",
+							(double)x,(double)y, "Zombie");
+				i1++;
+			}else if(monsterName.equals("Bandit")){
+				banditArray[i2] = new Bandit(RPG.ASSETS_PATH + "/units/bandit.png",
+							(double) x,(double)y, "Bandit");
+				i2++;
+			}else if(monsterName.equals("Skeleton")){
+				
+				skeletonArray[i3] = new Skeleton(RPG.ASSETS_PATH + "/units/skeleton.png",
+							(double) x,(double)y, "Skeleton");
+				i3++;
+			}else if(monsterName.equals("Draelic")){
+				draelicArray[i4] = new Draelic(RPG.ASSETS_PATH + "/units/necromancer.png",
+							(double) x,(double)y, "Draelic");
+				i4++;		
+			}else if(monsterName.equals("GiantBat")){
+				giantBatArray[i5] = new GiantBat(RPG.ASSETS_PATH + "/units/dreadbat.png",
+							(double) x,(double)y, "GiantBat");	
+				i5++;	
+			}
+		}
+		readMonsters.close();
+    }
+  
+    
+
+    
+    //update methods -------------------------------------------
+    
+    //handles monster deaths (i.e when monster object = null)
+	public void updateMonster(int delta) {
+		int i;
+    	for (i=0;i<NUM_ZOMBIE;i++){
+
+			//if monster is alive (i.e hp > 0) and monster isn't already dead
+			if(zombieArray[i] != null && zombieArray[i].getUnitStats().getHp() >= 0){
+				zombieArray[i].attackMonster(this);
+				zombieArray[i].update(this , delta);
+			//else monster is dead (i.e removed , isNULL)
+			}else{
+				zombieArray[i] = null;
+			}
+		}
+		
+		for (i=0;i<NUM_BANDIT;i++) {
+			//if monster is alive (i.e hp > 0) and monster isn't already dead
+			if(banditArray[i] != null && banditArray[i].getUnitStats().getHp() >= 0){
+				banditArray[i].attackMonster(this);
+				banditArray[i].update(this , delta);
+			//else monster is dead (i.e removed , isNULL)
+			}else{
+				banditArray[i] = null;
+			}
+		}
+		
+		for (i=0;i<NUM_SKELETON;i++) {
+			//if monster is alive (i.e hp > 0) and monster isn't already dead
+			if(skeletonArray[i] != null && skeletonArray[i].getUnitStats().getHp() >= 0){
+				
+				skeletonArray[i].attackMonster(this);
+				skeletonArray[i].update(this , delta);
+			//else monster is dead (i.e removed , isNULL)
+			}else{
+				skeletonArray[i] = null;
+			}
+		}
+		
+		for (i=0;i<NUM_GIANTBAT;i++) {
+			//if monster is alive (i.e hp > 0) and monster isn't already dead
+			if(giantBatArray[i] != null && giantBatArray[i].getUnitStats().getHp() >= 0){
+				giantBatArray[i].attackMonster(this);
+				giantBatArray[i].update(this , delta);
+			//else monster is dead (i.e removed , isNULL)
+			}else{
+				giantBatArray[i] = null;
+			}
+		}
+		
+		for (i=0;i<NUM_DRAELIC;i++) {
+			//if monster is alive (i.e hp > 0) and monster isn't already dead
+			if(draelicArray[i] != null && draelicArray[i].getUnitStats().getHp() >= 0){
+				
+				draelicArray[i].attackMonster(this);
+				draelicArray[i].update(this , delta);
+			//else monster is dead (i.e removed , isNULL)
+			}else{
+				draelicArray[i] = null;
+			}
+		}
+		
+	}
+	
+	//update to check if player picked up the item
+	public void updateItem(){
+		
+		/*if item exists, and not picked up yet, 
+		check if player is within range of item*/
+		if(amulet.isPickedUp() == false){
+			amulet.update(this);
+			
+		//else item doesn't exist (already picked up)
+		}else{
+			/*puts the item into players inventory.
+			(where its item id is the index in the array) */
+			player.setInventory(true, amulet.getItemID());
+			//add the buff when picked up
+			amulet.onPickUp(this.buffs);
+		}
+		
+		if(sword != null && sword.isPickedUp() == false){
+			sword.update(this);
+			
+		}else{
+			player.setInventory(true, sword.getItemID());
+			sword.onPickUp(this.buffs);
+			
+		}
+		if(tome.isPickedUp() == false){
+			tome.update(this);
+
+		}else{
+			player.setInventory(true, tome.getItemID());
+			tome.onPickUp(this.buffs);
+			
+		}
+		if(elixir.isPickedUp() == false){
+			elixir.update(this);
+			
+			
+		}else{
+
+			player.setInventory(true, elixir.getItemID());		
+		}
+		
+	}
+
+	
+	//ONLY GETTERS AND SETTERS BELOW
+	public Player getPlayer() {
+		return player;
+	}
+
+	public void setPlayer(Player player) {
+		this.player = player;
+	}
+
+	public static int getPlayerStartX() {
+		return PLAYER_START_X;
+	}
+
+	public static int getPlayerStartY() {
+		return PLAYER_START_Y;
+	}
+
+	public static int getElviraStartX() {
+		return ELVIRA_START_X;
+	}
+
+	public static int getElviraStartY() {
+		return ELVIRA_START_Y;
+	}
+
+	public int getAmuletID() {
+		return amulet.getItemID();
+	}
+
+	public Image getAmuletImage() {
+		return amulet.getImage();
+	}
+
+	public int getSwordID() {
+		return sword.getItemID();
+	}
+
+	public Image getSwordImage() {
+		return sword.getImage();
+	}
+
+
+	public int getTomeID() {
+		return tome.getItemID();
+	}
+
+	public Image getTomeImage() {
+		return tome.getImage();
+	}
+
+
+	public int getElixirID() {
+		return elixir.getItemID();
+	}
+
+	public Image getElixirImage() {
+		return elixir.getImage();
+	}
+
+	public BuffState getBuffs() {
+		return buffs;
+	}
+
+	public void setBuffs(BuffState buffs) {
+		this.buffs = buffs;
+	}
+
+  
+	
+    
+}
